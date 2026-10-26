@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>โค้ชชกเงา</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--red:#C21E2D;--ink:#17110F;--wrap:#F6F3EE;--ok:#7CF0B0;--warn:#FFD23F}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{font-family:Kanit,system-ui,sans-serif;background:var(--red);color:var(--wrap)}
+button{font:inherit;color:inherit;cursor:pointer}
+#menu,#sum{max-width:560px;margin:auto;padding:max(20px,env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom))}
+h1{font-size:2.6rem;line-height:1;margin:.3em 0 .15em;font-weight:700}
+h2{font-size:1.05rem;font-weight:600;margin:1.5em 0 .5em}
+.sub{margin:0;opacity:.88;line-height:1.5}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chip{padding:13px 8px;border:2px solid var(--wrap);background:none;border-radius:10px;font-weight:600}
+.chip.on{background:var(--wrap);color:var(--red)}
+.go{width:100%;margin-top:24px;padding:16px;border:0;border-radius:12px;background:var(--ink);color:var(--wrap);font-size:1.25rem;font-weight:700}
+.go.alt{background:none;border:2px solid var(--wrap)}
+#play{position:fixed;inset:0;background:var(--ink);display:flex;align-items:center;justify-content:center}
+#stage{position:relative;width:min(100vw,calc(100dvh*var(--ar,.5625)));aspect-ratio:var(--ar,.5625);overflow:hidden}
+#v,#cv{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1)}
+.top,.bot{position:absolute;left:0;right:0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center}
+.top{top:0;padding-top:max(10px,env(safe-area-inset-top));background:linear-gradient(var(--ink),transparent)}
+.bot{bottom:0;flex-direction:column;align-items:stretch;gap:6px;padding-bottom:max(12px,env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--ink) 55%)}
+.tm{font-size:2rem;font-weight:700}
+.mid{position:absolute;left:0;right:0;top:18%;text-align:center;padding:0 12px;pointer-events:none}
+#call{font-size:clamp(2.2rem,11vw,4rem);font-weight:700;text-shadow:0 2px 12px #000}
+#seq{display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap}
+#seq span{padding:3px 10px;border-radius:99px;border:2px solid var(--wrap);font-weight:600;font-size:.95rem;background:#0009}
+#seq .cur{background:var(--wrap);color:var(--ink)}#seq .dn{border-color:var(--ok);color:var(--ok)}
+#fb{min-height:1.6em;font-size:1.2rem;font-weight:600;text-align:center}
+#fb.ok{color:var(--ok)}#fb.warn{color:var(--warn)}
+.st{display:flex;justify-content:space-around;text-align:center}
+.st b{display:block;font-size:1.5rem}.st small{opacity:.8}
+.ib{background:#0008;border:2px solid var(--wrap);border-radius:10px;padding:6px 12px;font-weight:600}
+.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #fff4}
+.row b{font-size:1.2rem}
+</style></head><body>
+
+<div id="menu">
+  <h1>โค้ชชกเงา</h1>
+  <p class="sub">ตั้งมือถือให้เห็นตัวตั้งแต่ศีรษะถึงสะโพก ยืนห่างราว 2 เมตร หันหน้าเข้ากล้อง แสงสว่างพอ</p>
+  <h2>ท่าที่จะฝึก</h2><div class="grid" id="modes"></div>
+  <h2>ระดับ</h2><div class="grid" id="lvs" style="grid-template-columns:repeat(3,1fr)"></div>
+  <p class="sub" id="lvd" style="margin-top:8px"></p>
+  <h2>ท่าถนัด</h2><div class="grid" id="sts"></div>
+  <button class="go" id="go">เริ่มซ้อม</button>
+</div>
+
+<div id="play" hidden>
+  <div id="stage">
+    <video id="v" playsinline muted autoplay></video><canvas id="cv"></canvas>
+    <div class="top"><div><small id="rnd"></small><div class="tm" id="tm">0:00</div></div>
+      <div style="display:flex;gap:8px"><button class="ib" id="snd">เสียง</button><button class="ib" id="end">จบ</button></div></div>
+    <div class="mid"><div id="call"></div><div id="seq"></div></div>
+    <div class="bot"><div id="fb"></div>
+      <div class="st"><div><b id="reps">0</b><small>หมัด/ท่า</small></div><div><b id="sc">-</b><small>คะแนนล่าสุด</small></div><div><b id="spd">-</b><small>ความเร็ว ม./วิ</small></div></div></div>
+  </div>
+</div>
+
+<div id="sum" hidden></div>
+
+<script type="module">
+import {PoseLandmarker,FilesetResolver} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
+const q=s=>document.querySelector(s);
+const NAMES={jab:'แย็บ',cross:'ครอส',hookL:'ฮุกซ้าย',hookR:'ฮุกขวา',upL:'อัปเปอร์ซ้าย',upR:'อัปเปอร์ขวา',slipL:'หลบซ้าย',slipR:'หลบขวา',duck:'ก้มหลบ'};
+const MODES=[['jab','แย็บ'],['cross','ครอส'],['hookL','ฮุกซ้าย'],['hookR','ฮุกขวา'],['upL','อัปเปอร์ซ้าย'],['upR','อัปเปอร์ขวา'],['def','หลบหมัด'],['mix','ผสมคอมโบ']];
+/* spd=ความเร็วปลายหมัดขั้นต่ำ(ม./วิ) ext=สัดส่วนเหยียดแขน ret=เวลาดึงมือกลับ(วิ) rot=การหมุนลำตัว slip/duck=ระยะหลบ up=ระยะอัปเปอร์(ม.) elb=ช่วงมุมศอก eh=ศอกต่างจากระดับไหล่(ม.) combo=จำนวนท่าสูงสุดต่อคอมโบ */
+const LV={
+ b:{n:'มือใหม่',rounds:3,dur:60,rest:45,win:3.2,gap:1.2,spd:2,ext:.8,ret:1,rot:0,slip:.28,duck:.12,up:.14,elb:[45,140],eh:.25,combo:1,d:'3 ยก × 60 วิ พัก 45 วิ · เน้นท่าให้ถูกก่อน ยังไม่เข้มงวดเรื่องความเร็ว ทีละท่า'},
+ i:{n:'มีประสบการณ์',rounds:3,dur:90,rest:30,win:2.3,gap:.8,spd:3.5,ext:.88,ret:.7,rot:.12,slip:.38,duck:.18,up:.2,elb:[60,125],eh:.18,combo:2,d:'3 ยก × 90 วิ พัก 30 วิ · คอมโบสูงสุด 2 ท่า ตรวจการหมุนลำตัว ดึงมือกลับ และความเร็ว'},
+ p:{n:'มืออาชีพ',rounds:4,dur:120,rest:20,win:1.7,gap:.4,spd:5,ext:.93,ret:.5,rot:.22,slip:.48,duck:.24,up:.25,elb:[70,112],eh:.12,combo:3,d:'4 ยก × 120 วิ พัก 20 วิ · คอมโบสูงสุด 3 ท่า เวลาตอบสนองสั้น เกณฑ์ท่าและความเร็วสูง'}};
+const H={L:{w:15,e:13,s:11,o:'R'},R:{w:16,e:14,s:12,o:'L'}};
+const BONES=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24]];
+const S={mode:'jab',lv:'b',orth:true};
+let snd=true,lastSay=0,stream,lm,running=false,lastV=-1,T=0,lastT=0;
+let phase,t0,rs,rnd,nextAt,call,calls,reps,issues,best,actT,acc,base,dfn,hs,vis0;
+const vid=q('#v'),cv=q('#cv'),ctx=cv.getContext('2d');
+
+function build(){
+ q('#modes').innerHTML=MODES.map(([k,n])=>`<button class="chip${S.mode==k?' on':''}" data-m="${k}">${n}</button>`).join('');
+ q('#lvs').innerHTML=Object.entries(LV).map(([k,l])=>`<button class="chip${S.lv==k?' on':''}" data-l="${k}">${l.n}</button>`).join('');
+ q('#sts').innerHTML=[[1,'ถนัดขวา (มือซ้ายนำ)'],[0,'ถนัดซ้าย (มือขวานำ)']].map(([v,n])=>`<button class="chip${+S.orth==v?' on':''}" data-s="${v}">${n}</button>`).join('');
+ q('#lvd').textContent=LV[S.lv].d;
+}
+q('#menu').onclick=e=>{const b=e.target.closest('[data-m],[data-l],[data-s]');if(!b)return;const d=b.dataset;
+ if(d.m)S.mode=d.m;if(d.l)S.lv=d.l;if(d.s!==undefined)S.orth=d.s=='1';build()};
+build();
+
+function say(t,force){if(!snd||!window.speechSynthesis)return;const n=performance.now();if(!force&&n-lastSay<900)return;lastSay=n;
+ speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='th-TH';u.rate=1.15;speechSynthesis.speak(u)}
+function bell(){if(!snd)return;try{const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=880;o.connect(g);g.connect(a.destination);
+ g.gain.setValueAtTime(.4,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+1.2);o.start();o.stop(a.currentTime+1.2)}catch(e){}}
+function fb(m,c,silent){const el=q('#fb');el.textContent=m;el.className=c||'';if(!silent)say(m)}
+const mmss=s=>{s=Math.max(0,Math.ceil(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+const sub=(a,b)=>[a.x-b.x,a.y-b.y,a.z-b.z],len=a=>Math.hypot(a[0],a[1],a[2]);
+function ang(a,b,c){const u=sub(a,b),v=sub(c,b);return Math.acos(Math.max(-1,Math.min(1,(u[0]*v[0]+u[1]*v[1]+u[2]*v[2])/(len(u)*len(v)+1e-9))))*180/Math.PI}
+
+q('#snd').onclick=e=>{snd=!snd;e.target.textContent=snd?'เสียง':'ปิดเสียง'};
+q('#end').onclick=()=>finish();
+q('#go').onclick=start;
+
+async function start(){
+ q('#menu').hidden=true;q('#sum').hidden=true;q('#play').hidden=false;fb('กำลังเปิดกล้องและโหลดโมเดล...','',1);q('#call').textContent='';q('#seq').innerHTML='';
+ try{
+  if(!stream){stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:720},height:{ideal:1280}},audio:false});vid.srcObject=stream;await vid.play()}
+  if(!lm){const fs=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+   lm=await PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'GPU'},runningMode:'VIDEO',numPoses:1})}
+ }catch(e){q('#play').hidden=true;q('#menu').hidden=false;alert('เปิดกล้องหรือโหลดโมเดลไม่ได้: '+e.message+'\nต้องเปิดหน้านี้ผ่าน https (หรือ localhost) และอนุญาตการใช้กล้อง');return}
+ q('#stage').style.setProperty('--ar',vid.videoWidth/vid.videoHeight);cv.width=vid.videoWidth;cv.height=vid.videoHeight;
+ const mk=()=>({pos:null,sp:0,hist:[],act:null,pe:0,cool:0,t:0,rt:null});
+ hs={L:mk(),R:mk()};calls=[];reps=[];issues={};best=0;actT=0;acc=[];base=null;dfn=null;call=null;rnd=1;vis0=0;
+ phase='find';q('#reps').textContent=0;q('#sc').textContent='-';q('#spd').textContent='-';
+ running=true;lastT=performance.now()/1000;requestAnimationFrame(loop)}
+
+function loop(){
+ if(!running)return;requestAnimationFrame(loop);
+ if(vid.readyState<2||vid.currentTime===lastV)return;lastV=vid.currentTime;
+ const now=performance.now()/1000,dt=now-lastT;lastT=now;T=now;
+ const r=lm.detectForVideo(vid,performance.now());
+ ctx.clearRect(0,0,cv.width,cv.height);
+ const p=r.landmarks[0],w=r.worldLandmarks[0];
+ const ok=!!p&&[0,11,12,15,16,23,24].every(i=>p[i].visibility>.5&&p[i].x>0&&p[i].x<1&&p[i].y>0&&p[i].y<1);
+ if(p)draw(p);
+ if(ok)track(p,w);
+ tick(ok,dt)}
+
+function draw(p){const W=cv.width,Hh=cv.height;ctx.lineWidth=5;ctx.strokeStyle='rgba(246,243,238,.85)';
+ for(const[a,b]of BONES){ctx.beginPath();ctx.moveTo(p[a].x*W,p[a].y*Hh);ctx.lineTo(p[b].x*W,p[b].y*Hh);ctx.stroke()}
+ ctx.beginPath();ctx.arc(p[0].x*W,p[0].y*Hh,16,0,7);ctx.stroke();
+ for(const k of['L','R']){const m=p[H[k].w];ctx.fillStyle=hs&&hs[k].act?'#FFD23F':'#C21E2D';ctx.beginPath();ctx.arc(m.x*W,m.y*Hh,13,0,7);ctx.fill();ctx.stroke()}}
+
+function tick(ok,dt){
+ const L=LV[S.lv],call_=q('#call');
+ q('#rnd').textContent=phase=='round'||phase=='rest'?`ยก ${rnd}/${L.rounds}`:'';
+ if(phase=='find'){call_.textContent='ถอยให้เห็นตัวเต็ม';q('#tm').textContent='';
+  if(ok){vis0=vis0||T;if(T-vis0>1){phase='calib';t0=T;acc=[];fb('ยืนตั้งการ์ดนิ่งๆ','',1);say('ตั้งการ์ดนิ่งๆ',1)}}else vis0=0}
+ else if(phase=='calib'){const l=3-(T-t0);call_.textContent='ตั้งการ์ด '+Math.ceil(l);
+  if(l<=0){if(acc.length<10){phase='find';vis0=0;return}
+   base={hx:acc.reduce((a,b)=>a+b[0],0)/acc.length,h:acc.reduce((a,b)=>a+b[1],0)/acc.length};startRound()}}
+ else if(phase=='round'){actT+=dt;const left=L.dur-(T-rs);q('#tm').textContent=mmss(left);
+  if(call&&T>call.end){fb('ช้าไป','warn');call=null;nextAt=T+L.gap;renderCall()}
+  if(!call&&T>=nextAt)newCall();
+  if(left<=0){if(call)calls.pop();call=null;bell();if(rnd>=L.rounds)return finish();phase='rest';t0=T;call_.textContent='พัก';q('#seq').innerHTML='';say('พักก่อน',1)}}
+ else if(phase=='rest'){const l=L.rest-(T-t0);q('#tm').textContent=mmss(l);if(l<=0){rnd++;startRound()}}}
+
+function startRound(){phase='round';rs=T;nextAt=T+1.5;call=null;bell();q('#call').textContent='เริ่ม!';say('ยก '+rnd,1)}
+
+function pool(){const m=S.mode,l=S.lv;
+ if(m=='def')return l=='b'?['slipL','slipR']:['slipL','slipR','duck'];
+ if(m=='mix'){const a=['jab','cross','hookL','hookR'];if(l!='b')a.push('upL','upR','slipL','slipR');if(l=='p')a.push('duck');return a}
+ return[m]}
+function newCall(){const L=LV[S.lv],P=pool(),n=S.mode=='mix'?1+Math.floor(Math.random()*L.combo):1,seq=[];
+ for(let i=0;i<n;i++)seq.push(P[Math.floor(Math.random()*P.length)]);
+ call={seq,i:0,end:T+L.win+.8*(n-1)+(seq.some(x=>/^(slip|duck)/.test(x))?1.2:0),reps:[]};
+ calls.push(call);renderCall();say(seq.map(x=>NAMES[x]).join(' '),1)}
+function renderCall(){q('#call').textContent=call?NAMES[call.seq[call.i]]||'':'…';
+ q('#seq').innerHTML=call&&call.seq.length>1?call.seq.map((x,j)=>`<span class="${j<call.i?'dn':j==call.i?'cur':''}">${NAMES[x]}</span>`).join(''):''}
+
+function judge(rep,qs,sf){const L=LV[S.lv],bad=qs.filter(x=>!x[0]);rep.bad=bad.map(x=>x[1]);
+ rep.score=Math.round(100*(.65*(qs.length-bad.length)/qs.length+.35*Math.min(1,sf)));
+ bad.forEach(x=>issues[x[1]]=(issues[x[1]]||0)+1);
+ q('#sc').textContent=rep.score;
+ if(rep.peak){best=Math.max(best,rep.peak);q('#spd').textContent=rep.peak.toFixed(1)}
+ bad.length?fb(bad[0],'warn'):fb(['ดีมาก','สวย','เยี่ยม','ใช่เลย'][Math.floor(Math.random()*4)],'ok');
+ reps.push(rep);q('#reps').textContent=reps.length;
+ if(call){if(call.seq[call.i]==rep.name){call.i++;call.reps.push(rep);
+   if(call.i>=call.seq.length){call=null;nextAt=T+L.gap+Math.random()*.8}renderCall()}
+  else fb(`นั่นคือ${NAMES[rep.name]} ต้อง${NAMES[call.seq[call.i]]}`,'warn')}}
+
+function track(p,w){
+ if(phase!='round'&&phase!='calib')return;
+ const L=LV[S.lv],a=p[11],b=p[12],h1=p[23],h2=p[24],n=p[0];
+ const sw=Math.abs(a.x-b.x)+1e-6,my=(h1.y+h2.y)/2,tl=Math.abs(my-(a.y+b.y)/2)+1e-6;
+ const hx=(n.x-(h1.x+h2.x)/2)/sw,h=(my-n.y)/tl;
+ if(phase=='calib'){acc.push([hx,h]);return}
+ const dx=hx-base.hx,dh=1-h/base.h,mg=Math.max(Math.abs(dx)/L.slip,dh/L.duck);
+ const gu=p[15].y<=p[11].y+.05&&p[16].y<=p[12].y+.05;
+ if(!dfn){let ev=null;if(dx>L.slip)ev='slipL';else if(dx<-L.slip)ev='slipR';else if(dh>L.duck)ev='duck';
+  if(ev)dfn={ev,t0:T,mag:mg,gu}}
+ else{dfn.mag=Math.max(dfn.mag,mg);if(!gu)dfn.gu=false;
+  if(Math.abs(dx)<L.slip*.4&&dh<L.duck*.4){const d=dfn;dfn=null;
+   judge({name:d.ev,peak:0},[[d.mag>=1.3,'หลบให้ลึกกว่านี้'],[d.gu,'มือตกจากการ์ด'],[T-d.t0<=L.win*.7,'กลับท่าตั้งรับให้ไวขึ้น']],d.mag/1.6)}
+  else if(T-dfn.t0>3)dfn=null}
+ hand('L',p,w);hand('R',p,w)}
+
+function hand(k,p,w){
+ const L=LV[S.lv],c=H[k],s=hs[k],W=w[c.w],E=w[c.e],Sh=w[c.s],pos={x:W.x,y:W.y,z:W.z};
+ const dt=T-s.t;if(s.pos&&dt>0&&dt<.3)s.sp=.5*s.sp+.5*len(sub(pos,s.pos))/dt;else s.sp=0;
+ s.pos=pos;s.t=T;s.hist.push(pos);if(s.hist.length>5)s.hist.shift();
+ const ext=len(sub(W,Sh))/(len(sub(E,Sh))+len(sub(W,E))+1e-9),el=ang(Sh,E,W);
+ const rot=(w[11].z-w[12].z)/(Math.abs(w[11].x-w[12].x)+Math.abs(w[11].z-w[12].z)+1e-9);
+ if(s.rt){if(ext<.55||T-s.rt.t0>1.5){if(T-s.rt.t0>L.ret){const r=s.rt.rep,m='ดึงมือกลับการ์ดให้ไวขึ้น';r.score=Math.max(0,r.score-15);issues[m]=(issues[m]||0)+1;fb(m,'warn')}s.rt=null}}
+ let a=s.act;
+ if(!a){if(s.sp>1.3&&s.pe<.75&&!dfn&&s.hist.length>3&&T>s.cool)s.act={t0:T,st:s.hist[0],peak:s.sp,mx:0,far:pos,elb:el,eY:0,ext,rot0:rot,dr:0,gu:true}}
+ else{a.peak=Math.max(a.peak,s.sp);const d=len(sub(pos,a.st));if(d>a.mx){a.mx=d;a.far=pos;a.elb=el;a.eY=E.y-Sh.y}
+  a.ext=Math.max(a.ext,ext);a.dr=Math.max(a.dr,Math.abs(rot-a.rot0));
+  const o=H[c.o];if(p[o.w].y>p[o.s].y+.05)a.gu=false;
+  if(s.sp<.8||T-a.t0>1){s.act=null;s.cool=T+.15;if(a.mx>.16&&T-a.t0>.07)punch(k,a,s)}}
+ s.pe=ext}
+
+function punch(k,a,s){
+ const L=LV[S.lv],d=sub(a.far,a.st),ax=Math.abs(d[0]),up=-d[1];let t,name;
+ if(a.ext>=.78&&a.elb>=135)t='s';else if(up>ax*.9&&up>.1)t='u';else if(ax>.1)t='h';else return;
+ if(t=='s')name=k==(S.orth?'L':'R')?'jab':'cross';else name=(t=='h'?'hook':'up')+k;
+ const qs=[[a.peak>=L.spd,'เร็วขึ้นอีก ปล่อยหมัดไวแล้วสะบัดกลับ'],[a.gu,'มืออีกข้างตกจากการ์ด']];
+ if(t=='s')qs.push([a.ext>=L.ext,'เหยียดแขนให้สุด ส่งไหล่ตาม']);
+ else{qs.push([a.elb>=L.elb[0]&&a.elb<=L.elb[1],'งอศอกให้ได้ราว 90 องศา']);
+  t=='h'?qs.push([Math.abs(a.eY)<=L.eh,'ยกศอกให้ระดับไหล่']):qs.push([up>=L.up,'ดันหมัดขึ้นให้สูงกว่านี้'])}
+ if(L.rot)qs.push([a.dr>=L.rot,'หมุนลำตัวและสะโพกเข้าหมัด']);
+ const rep={name,peak:a.peak};judge(rep,qs,a.peak/L.spd);
+ if(t=='s')s.rt={rep,t0:T}}
+
+function finish(){
+ running=false;speechSynthesis&&speechSynthesis.cancel();
+ stream&&stream.getTracks().forEach(t=>t.stop());stream=null;
+ const L=LV[S.lv],cs=calls.map(c=>c.reps.reduce((a,r)=>a+r.score,0)/c.seq.length);
+ const ok=calls.filter(c=>c.i>=c.seq.length).length,avg=cs.length?Math.round(cs.reduce((a,b)=>a+b,0)/cs.length):0;
+ const top=Object.entries(issues).sort((a,b)=>b[1]-a[1]).slice(0,3);
+ const rpm=actT>5?(reps.length/(actT/60)).toFixed(0):'-';
+ const row=(a,b)=>`<div class="row"><span>${a}</span><b>${b}</b></div>`;
+ q('#play').hidden=true;const el=q('#sum');el.hidden=false;
+ el.innerHTML=`<h1>สรุปการซ้อม</h1><p class="sub">${MODES.find(m=>m[0]==S.mode)[1]} · ระดับ${L.n}</p><div style="margin-top:18px">
+ ${row('คะแนนเฉลี่ย',avg+' / 100')}${row('ทำตามคำสั่งสำเร็จ',ok+' / '+calls.length)}${row('จำนวนหมัด/ท่าที่ตรวจจับได้',reps.length)}
+ ${row('ความถี่',rpm+' ครั้ง/นาที')}${row('ความเร็วปลายหมัดสูงสุด',best?best.toFixed(1)+' ม./วิ':'-')}</div>
+ <h2>ควรแก้ก่อน</h2>${top.length?top.map(([m,n])=>row(m,n+' ครั้ง')).join(''):'<p class="sub">ไม่มีจุดที่ต้องแก้เด่นชัด</p>'}
+ <button class="go" id="again">ซ้อมอีกครั้ง</button><button class="go alt" id="back">กลับเมนู</button>`;
+ q('#again').onclick=start;q('#back').onclick=()=>{el.hidden=true;q('#menu').hidden=false}}
+</script></body></html>
